@@ -1,0 +1,220 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoyaltyChain</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f1f5f9;
+  color: #18324b;
+  margin: 0;
+}
+header {
+  background: #17324d;
+  color: white;
+  padding: 25px;
+  text-align: center;
+}
+main {
+  max-width: 700px;
+  margin: 25px auto;
+  padding: 15px;
+}
+.card {
+  background: white;
+  padding: 20px;
+  margin-bottom: 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0001;
+}
+input, select, button {
+  padding: 12px;
+  margin: 7px 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 7px;
+}
+input, select {
+  border: 1px solid #bbb;
+}
+button {
+  background: #286b9b;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:hover { background: #17324d; }
+.block {
+  background: #eef5fa;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+small { color: #617487; }
+</style>
+</head>
+<body>
+
+<header>
+<h1>⛓ LoyaltyChain</h1>
+<p>Blockchain-Based Loyalty Points Ledger</p>
+</header>
+
+<main>
+<div class="card">
+<h2>Customer Transactions</h2>
+
+<input id="customer" placeholder="Customer Name">
+<select id="type">
+<option value="Earn">Earn Points</option>
+<option value="Redeem">Redeem Points</option>
+</select>
+<input id="points" type="number" placeholder="Enter Points">
+
+<button onclick="addTransaction()">Add Transaction</button>
+<p id="message"></p>
+</div>
+
+<div class="card">
+<h2>Customer Balance</h2>
+<div id="balance">No transactions yet.</div>
+</div>
+
+<div class="card">
+<h2>Blockchain Ledger</h2>
+<button onclick="sealBlock()">Create Block</button>
+<button onclick="verifyChain()">Verify Blockchain</button>
+<p id="status"></p>
+<div id="ledger"></div>
+</div>
+</main>
+
+<script>
+let pending = [];
+let chain = [{
+ index: 0,
+ previousHash: "0",
+ hash: "GENESIS",
+ transactions: []
+}];
+
+let balances = {};
+
+function addTransaction() {
+ const name = document.getElementById("customer").value.trim();
+ const type = document.getElementById("type").value;
+ const points = Number(document.getElementById("points").value);
+
+ if (!name || !Number.isInteger(points) || points <= 0) {
+  document.getElementById("message").textContent =
+  "Enter valid customer name and points.";
+  return;
+ }
+
+ let current = balances[name] || 0;
+ pending.forEach(t => {
+  if(t.customer === name)
+   current += t.type === "Earn" ? t.points : -t.points;
+ });
+
+ if(type === "Redeem" && current < points) {
+  document.getElementById("message").textContent =
+  "Insufficient points!";
+  return;
+ }
+
+ pending.push({
+  customer: name,
+  type: type,
+  points: points,
+  time: new Date().toLocaleString()
+ });
+
+ document.getElementById("message").textContent =
+ "Transaction added successfully!";
+
+ document.getElementById("customer").value = "";
+ document.getElementById("points").value = "";
+}
+
+async function hashData(data) {
+ const bytes = new TextEncoder().encode(JSON.stringify(data));
+ const result = await crypto.subtle.digest("SHA-256", bytes);
+ return Array.from(new Uint8Array(result))
+ .map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+async function sealBlock() {
+ if(pending.length === 0) {
+  alert("Add a transaction first!");
+  return;
+ }
+
+ const block = {
+  index: chain.length,
+  previousHash: chain[chain.length-1].hash,
+  transactions: [...pending]
+ };
+
+ block.hash = await hashData(block);
+ chain.push(block);
+
+ pending.forEach(t => {
+  balances[t.customer] = (balances[t.customer] || 0)
+   + (t.type === "Earn" ? t.points : -t.points);
+ });
+
+ pending = [];
+ display();
+ document.getElementById("status").textContent =
+ "New block created successfully!";
+}
+
+function display() {
+ document.getElementById("balance").innerHTML =
+ Object.entries(balances).map(([name, points]) =>
+ `<p>${name}: <b>${points} points</b></p>`
+ ).join("") || "No transactions yet.";
+
+ document.getElementById("ledger").innerHTML =
+ chain.map(b => `
+ <div class="block">
+ <h3>Block #${b.index}</h3>
+ <small>Previous Hash: ${b.previousHash}</small>
+ <p>Hash: ${b.hash}</p>
+ <p>Transactions: ${b.transactions.length}</p>
+ </div>
+ `).join("");
+}
+
+async function verifyChain() {
+ for(let i=1; i<chain.length; i++) {
+  const b = chain[i];
+  if(b.previousHash !== chain[i-1].hash) {
+   document.getElementById("status").textContent =
+   "Blockchain verification failed!";
+   return;
+  }
+  const data = {
+   index: b.index,
+   previousHash: b.previousHash,
+   transactions: b.transactions
+  };
+  if(await hashData(data) !== b.hash) {
+   document.getElementById("status").textContent =
+   "Blockchain data was modified!";
+   return;
+  }
+ }
+ document.getElementById("status").textContent =
+ "Blockchain verified successfully!";
+}
+
+display();
+</script>
+</body>
+</html>
